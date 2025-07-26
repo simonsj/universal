@@ -8,6 +8,7 @@ import * as asar from '@electron/asar';
 import { minimatch } from 'minimatch';
 
 import { d } from './debug.js';
+import { isMachO, isUniversalMachO } from './macho.js';
 
 const LIPO = 'lipo';
 
@@ -23,20 +24,6 @@ export type MergeASARsOptions = {
 
   singleArchFiles?: string;
 };
-
-// See: https://github.com/apple-opensource-mirror/llvmCore/blob/0c60489d96c87140db9a6a14c6e82b15f5e5d252/include/llvm/Object/MachOFormat.h#L108-L112
-const MACHO_MAGIC = new Set([
-  // 32-bit Mach-O
-  0xfeedface, 0xcefaedfe,
-
-  // 64-bit Mach-O
-  0xfeedfacf, 0xcffaedfe,
-]);
-
-const MACHO_UNIVERSAL_MAGIC = new Set([
-  // universal
-  0xcafebabe, 0xbebafeca,
-]);
 
 export const detectAsarMode = async (appPath: string) => {
   d('checking asar mode of', appPath);
@@ -160,7 +147,7 @@ export const mergeASARs = async ({
       continue;
     }
 
-    if (!MACHO_MAGIC.has(x64Content.readUInt32LE(0))) {
+    if (!isMachO(x64Content)) {
       throw new Error(`Can't reconcile two non-macho files ${file}`);
     }
 
@@ -230,8 +217,4 @@ export const mergeASARs = async ({
       fs.promises.rm(arm64Dir, { recursive: true, force: true }),
     ]);
   }
-};
-
-export const isUniversalMachO = (fileContent: Buffer) => {
-  return MACHO_UNIVERSAL_MAGIC.has(fileContent.readUInt32LE(0));
 };

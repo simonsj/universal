@@ -2,9 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { promises as stream } from 'node:stream';
 
-import { spawn, ExitCodeError } from '@malept/cross-spawn-promise';
-
-const MACHO_PREFIX = 'Mach-O ';
+import { isMachO, isUniversalMachO } from './macho.js';
 
 export enum AppFileType {
   MACHO,
@@ -37,19 +35,17 @@ export const getAllAppFiles = async (appPath: string): Promise<AppFile[]> => {
     if (info.isFile()) {
       let fileType = AppFileType.PLAIN;
 
-      var fileOutput = '';
+      let isMachOFile = false;
       try {
-        fileOutput = await spawn('file', ['--brief', '--no-pad', p]);
+        const header = await readMachOHeader(p);
+        isMachOFile = isMachO(header) || isUniversalMachO(header);
       } catch (e) {
-        if (e instanceof ExitCodeError) {
-          /* silently accept error codes from "file" */
-        } else {
-          throw e;
-        }
+        /* silently accept errors from readMachOHeader */
       }
+
       if (p.endsWith('.asar')) {
         fileType = AppFileType.APP_CODE;
-      } else if (fileOutput.startsWith(MACHO_PREFIX)) {
+      } else if (isMachOFile) {
         fileType = AppFileType.MACHO;
       } else if (p.endsWith('.bin')) {
         fileType = AppFileType.SNAPSHOT;
@@ -75,14 +71,14 @@ export const getAllAppFiles = async (appPath: string): Promise<AppFile[]> => {
 };
 
 export const readMachOHeader = async (path: string) => {
-  const chunks: Buffer[] = [];
-  // no need to read the entire file, we only need the first 4 bytes of the file to determine the header
-  await stream.pipeline(fs.createReadStream(path, { start: 0, end: 3 }), async function* (source) {
-    for await (const chunk of source) {
-      chunks.push(chunk);
-    }
-  });
-  return Buffer.concat(chunks);
+  const buffer = Buffer.allocUnsafe(4);
+  const fd = await fs.promises.open(path, 'r');
+  try {
+    const { bytesRead } = await fd.read(buffer, 0, 4, 0);
+    return bytesRead < 4 ? buffer.subarray(0, bytesRead) : buffer;
+  } finally {
+    await fd.close();
+  }
 };
 
 export const fsMove = async (oldPath: string, newPath: string) => {

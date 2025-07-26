@@ -8,8 +8,9 @@ import * as dircompare from 'dir-compare';
 import { minimatch } from 'minimatch';
 import plist from 'plist';
 
-import { AsarMode, detectAsarMode, isUniversalMachO, mergeASARs } from './asar-utils.js';
+import { AsarMode, detectAsarMode, mergeASARs } from './asar-utils.js';
 import { AppFile, AppFileType, fsMove, getAllAppFiles, readMachOHeader } from './file-utils.js';
+import { isUniversalMachO } from './macho.js';
 import { sha } from './sha.js';
 import { d } from './debug.js';
 import { computeIntegrityData } from './integrity.js';
